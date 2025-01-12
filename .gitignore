@@ -20,4 +20,4 @@ rad.json
 *.flf
 #Test results file
 *.avi
-TestResults.xml*.avi
+TestResults.xml
