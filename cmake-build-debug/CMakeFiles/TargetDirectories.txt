@@ -1,0 +1,3 @@
+/home/qing/git_project/imgprocess-smartcar/cmake-build-debug/CMakeFiles/chitu_clion_19_46.dir
+/home/qing/git_project/imgprocess-smartcar/cmake-build-debug/CMakeFiles/edit_cache.dir
+/home/qing/git_project/imgprocess-smartcar/cmake-build-debug/CMakeFiles/rebuild_cache.dir
