@@ -18,13 +18,13 @@ int main() {
     CvCapture.set(cv::CAP_PROP_POS_FRAMES, 999); // 999因为帧索引是从0开始的
         img_process_object processor;
 
-    processor.initializeMappingTable();
-    // std::string image_path = "/home/qing/Downloads/code/resource/1.jpg"; // 替换为你的图片路径
+    // processor.initializeMappingTable();
+    std::string image_path = "/home/qing/git_project/imgprocess-smartcar/resource/8.jpg"; // 替换为你的图片路径
     while (true){
 
         CvCapture.read(img_origin);
-        // Mat img_lhc = imread(image_path, IMREAD_COLOR);
-        // auto start = std::chrono::high_resolution_clock::now();
+        // Mat img_origin = imread(image_path, IMREAD_COLOR);
+        auto start = std::chrono::high_resolution_clock::now();
         cv::resize(img_origin, img_origin, cv::Size(188, 120));
         cv::Mat color_image;
         cv::cvtColor(img_origin, color_image, COLOR_BGR2GRAY);
@@ -41,14 +41,16 @@ int main() {
         processor.draw_line_1(processor.disp_color_image,processor.l_border,cv::Scalar(255, 0, 0), use_h - 1);
         processor.draw_line_1(processor.disp_color_image,processor.r_border,cv::Scalar(255, 0, 0), use_h - 1);
         processor.draw_line_1(processor.disp_color_image,processor.center_line,cv::Scalar(0, 255, 0), use_h - 1);
+        circle(processor.disp_color_image,Point(processor.points_test[0][0],processor.points_test[0][1]),2,cv::Scalar(0, 0, 255), FILLED);
+        circle(processor.disp_color_image,Point(processor.points_test[1][0],processor.points_test[1][1]),2,cv::Scalar(255, 0, 0), FILLED);
         // cv::circle(processor.disp_color_image,cv::Point(processor.center_line[use_h-20], use_h-20),1,cv::Scalar(0, 255, 255), 5);
-        for (int i = 0; i < processor.data_stastics_l; i++) {
-            circle(processor.disp_color_image, Point(processor.points_l[i][0] + 2, processor.points_l[i][1]), 2, Scalar(0, 0, 255), FILLED); // Display starting point in blue
-        }
+        // for (int i = 0; i < processor.data_stastics_l; i++) {
+        //     circle(processor.disp_color_image, Point(processor.points_l[i][0] + 2, processor.points_l[i][1]), 2, Scalar(0, 0, 255), FILLED); // Display starting point in blue
+        // }
 
-        for (int i = 0; i < processor.data_stastics_l; i++) {
-            circle(processor.disp_color_image, Point(processor.points_r[i][0] + 2, processor.points_r[i][1]), 2, Scalar(0, 0, 255), FILLED); // Display starting point in blue
-        }
+        // for (int i = 0; i < processor.data_stastics_l; i++) {
+        //     circle(processor.disp_color_image, Point(processor.points_r[i][0] + 2, processor.points_r[i][1]), 2, Scalar(0, 0, 255), FILLED); // Display starting point in blue
+        // }
 
         // for (int i = 0; i < processor.data_stastics_l; i++) {
         //     circle(img_lhc, Point(processor.points_l[i][0] + 2, processor.points_l[i][1]), 2, Scalar(0, 0, 255), FILLED); // Display starting point in blue

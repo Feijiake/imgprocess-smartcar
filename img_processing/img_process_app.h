@@ -23,13 +23,15 @@ typedef char         int8;
 #define border_min		1 //边界宽度
 #define         USED_COL                188
 #define         USED_ROW                120
-#define image_h	120
+#define image_h	120   //原始图像大小
 #define image_w	188
-#define compressimage_h	60
+#define compressimage_h	60  //压缩后的图像大小
 #define compressimage_w	99
-#define use_h compressimage_h
+#define use_h compressimage_h   //要处理的图像大小 image_h 或者compressimage_h
 #define use_w compressimage_w
 #define max(a,b)	(((a) > (b)) ? (a) : (b))
+#define min(a,b)	(((a) < (b)) ? (a) : (b))
+#define start_h use_h - 1 //八领域开始的生长y
 //可使用的
 //#include <ros/ros.h>
 
@@ -64,7 +66,7 @@ public:
     uint16 data_stastics_l = 0;
     uint16 data_stastics_r = 0;
     uint8 center_line[use_h];//中线数组
-    uint8 center_err[use_h];//中线数组
+    float center_err[use_h];//中线误差数组
     uint8 l_border[use_h];//左边线
     uint8 r_border[use_h];//右边线
     uint16 points_l[(uint16)USE_num][2] = { {  0 } };
@@ -136,7 +138,7 @@ public:
     /*颜色查找*/
 
     /*接口类*/
-    uint8 err=0;
+    float Det_True;
     /*接口类*/
 
     /*初始化*/
@@ -168,12 +170,37 @@ private:
     double change_un_Mat[3][3] ={{-0.371672,0.191928,1.624000},{-0.004298,0.013590,-7.454951},{-0.000330,0.002199,-0.331952}};//逆透视矩阵
     /*逆透视*/
 
+
+    /*元素*/
+    #define  RightCirque_TowPoint_Flag 1
+    #define  LeftCirque_TowPoint_Flag 1
+    bool CirqueOff = false;
+    uint8 RightCirque_Flag = 0;
+    uint8 LeftCirque_Flag = 0;
+    uint8 Straight_Flag = 0;
+    uint8 Cross_Flag = 0;
+
+    /*元素*/
+
+    /*前瞻*/
+    uint8 set_towpoint = 45;
+    uint8 TowPoint_True;
+    void GetDet(const uint8 speed_now,const uint8 speed_min);
+        /*前瞻*/
+
     /*寻线*/
     uint8 offline = 30;//截至行,截至行后的数据为无效数据
+    uint8 target_center[60] = {
+        96, 127, 0, 0, 72, 16, 23, 70, 42, 39,
+        39, 40, 40, 39, 40, 40, 40, 39, 40, 40,
+        40, 40, 40, 40, 40, 40, 40, 39, 40, 40,
+        40, 40, 40, 40, 40, 41, 41, 42, 43, 43,
+        44, 45, 45, 46, 47, 47, 48, 48, 49, 49,
+        49, 49, 49, 49, 49, 49, 49, 49, 49, 0
+    };;//实际的赛道期望中线,当车在赛道正中间时,图像的中线不一定是赛道的中线,需要实际测量
     uint8 line_detect_l = 0;//从找到的第一个边线数组开始,有多少个有效点
     uint8 line_detect_r = 0;
     uint8 line_detect_center = 0;//中线数组的有效点
-    uint8 target_center = 93;//实际的赛道期望中线,当车在赛道正中间时,图像的中线不一定是赛道的中线,需要实际测量
     int sobel_th = 7; //sobel 阈值
     uint8 start_cow_l = use_w/2;//sobel算子左边寻线开始行
     uint8 start_cow_r = use_w/2;
@@ -519,7 +546,7 @@ inline uint8 img_process_object::get_start_point_sobel(const cv::Mat& img) {
     start_point_r[1] = 0; // y
 
 
-    uint8 start_row = use_h-10;
+    uint8 start_row = start_h;
     // 从指定行开始向上查找
     // printf("start_cow_l=%d",start_cow_l);
     // for (int row = start_row; row > 0; row--) {
@@ -557,14 +584,14 @@ inline uint8 img_process_object::get_start_point_sobel(const cv::Mat& img) {
                 start_cow_r = start_point_r[0] - 40 ;
             }
 
-            points_test[0][0]=start_point_l[0];
-            points_test[0][1]=start_point_l[1];
-            points_test[1][0]=start_point_r[0];
-            points_test[1][1]=start_point_r[1];
-            points_test[2][0]=start_cow_l;
-            points_test[2][1]=110;
-            points_test[3][0]=start_cow_r;
-            points_test[3][1]=110;
+            // points_test[0][0]=start_point_l[0];
+            // points_test[0][1]=start_point_l[1];
+            // points_test[1][0]=start_point_r[0];
+            // points_test[1][1]=start_point_r[1];
+            // points_test[2][0]=start_cow_l;
+            // points_test[2][1]=110;
+            // points_test[3][0]=start_cow_r;
+            // points_test[3][1]=110;
             // printf("找到右边起始点: (%d, %d)\n", start_cow_l, 110);
             return 1;
         } else {
@@ -763,8 +790,8 @@ inline void img_process_object::search_l_r(
             {
                 temp_l[index_l][0] = search_filds_l[(i)][0];
                 temp_l[index_l][1] = search_filds_l[(i)][1];
-                points_test[0][0]=search_filds_l[(i)][0];
-                points_test[0][1]=search_filds_l[(i)][1];
+                // points_test[0][0]=search_filds_l[(i)][0];
+                // points_test[0][1]=search_filds_l[(i)][1];
                 // printf("x=%d, y=%d\n", temp_l[index_l][0], temp_l[index_l][1]);
                 index_l++;
                 dir_l[l_data_statics - 1] = (i);//记录生长方向
@@ -836,8 +863,8 @@ inline void img_process_object::search_l_r(
             {
                 temp_r[index_r][0] = search_filds_r[(i)][0];
                 temp_r[index_r][1] = search_filds_r[(i)][1];
-                points_test[1][0]=search_filds_r[(i)][0];
-                points_test[1][1]=search_filds_r[(i)][1];
+                // points_test[1][0]=search_filds_r[(i)][0];
+                // points_test[1][1]=search_filds_r[(i)][1];
                 index_r++;//索引加一
                 dir_r[r_data_statics - 1] = (i);//记录生长方向
 
@@ -885,7 +912,7 @@ inline void img_process_object::get_left(uint16 total_L)
     {
         l_border[i] = border_min;
     }
-    h = use_h-10;
+    h = start_h;
     // printf("h:%d\n", h);
     //左边
     for (j = 0; j < total_L; j++)
@@ -918,7 +945,7 @@ inline void img_process_object::get_right(uint16 total_R)
     {
         r_border[i] = border_max;//右边线初始化放到最右边，左边线放到最左边，这样八邻域闭合区域外的中线就会在中间，不会干扰得到的数据
     }
-    h = use_h-10;
+    h = start_h;
     //右边
     for (j = 0; j < total_R; j++)
     {
@@ -1101,7 +1128,7 @@ inline void img_process_object::find_line()
     // 测量 get_start_point
     // t1 = high_resolution_clock::now();
     cv::Mat temp = mt9v03x_image.clone();
-    if (get_start_point(temp, (use_h - 10))) {
+    if (get_start_point(temp, (start_h))) {
         // t2 = high_resolution_clock::now();
         // std::cout << "get_start_point 运行时间: "
         //           << duration_cast<milliseconds>(t2 - t1).count() << " ms" << std::endl;
@@ -1138,6 +1165,7 @@ inline void img_process_object::find_line()
         // 测量 RouteFilter
         // t1 = high_resolution_clock::now();
         RouteFilter();
+        GetDet(40,40);
         // t2 = high_resolution_clock::now();
         // std::cout << "RouteFilter 运行时间: "
         //           << duration_cast<milliseconds>(t2 - t1).count() << " ms" << std::endl;
@@ -1153,9 +1181,13 @@ inline void img_process_object::get_center()
 {
     for (int i = hightest; i < use_h - 1; i++) {
         center_line[i] = (l_border[i] + r_border[i]) >> 1; // Calculate center line
-        center_err[i] = center_line[i] -target_center;
+        center_err[i] = center_line[i] -target_center[i];
+        // printf("center_line[%d] = %d\n",i,center_err[i]);
+
     }
-    // printf("center_line = %d",center_line[image_h-20]);//找target_center用
+    // for (int i =0; i < use_h ; i++) {
+    //     printf("center_line[%d] = %d\n",i,center_line[i]);
+    // }
 }
 
 inline void img_process_object::RouteFilter()
@@ -1189,11 +1221,92 @@ inline void img_process_object::RouteFilter()
 }
 
 
-void img_process_object::draw_line_1(cv::Mat& image, const uint8_t border[], cv::Scalar color, int num) {
+inline void img_process_object::draw_line_1(cv::Mat& image, const uint8_t border[], cv::Scalar color, int num) {
     for(int i=0;i<num;i++){
 
         cv::circle(image,cv::Point(border[i], i),1,color,-1);
     }
+}
+inline void img_process_object::GetDet(const uint8 speed_now,const uint8 speed_min)
+{
+    float DetTemp = 0;//计算平均误差
+    float SpeedGain = 0;//速度因子，根据速度因子计算前瓒
+    float UnitAll = 0; //累积的权重，用于归一化计算。
+    int TowPoint = set_towpoint; //前瞻点
+    int Ysite = 0;    //当前点
+
+    const int MAX_TOWPOINT = 49;//最大前瞻
+    const int MIN_TOWPOINT = 1;//最小前瞻
+    const int CIRQUE_TOWPOINT = 30;//圆环前瞻
+    const int CROSS_TURN_TOWPOINT = 22;//十字前瞻
+    const int STRAIGHET_TOWPOINT = 10;//直线前瞻
+
+    SpeedGain = ( speed_now- speed_min) * 0.2 + 0.5; //小于最低速度时,前瞻变变短 大于变远
+    SpeedGain = std::clamp(SpeedGain, -1.0f, 5.0f);
+
+    if ((RightCirque_Flag > RightCirque_TowPoint_Flag || LeftCirque_Flag > LeftCirque_TowPoint_Flag)&&CirqueOff == false)
+        TowPoint = CIRQUE_TOWPOINT;
+    else if (Straight_Flag ==1)
+        TowPoint = STRAIGHET_TOWPOINT;
+    else if (Cross_Flag ==1)
+        TowPoint = CROSS_TURN_TOWPOINT;
+    else
+        TowPoint = TowPoint-SpeedGain;                                          //速度越快前瞻越长
+    TowPoint = min(start_h,TowPoint);//限制前瞻位置
+
+
+
+    if ((TowPoint - 5) >= line_detect_center) {
+        for (int Ysite = (TowPoint - 5); Ysite < TowPoint; Ysite++) {
+      DetTemp = DetTemp + Weighting[TowPoint - Ysite - 1] * (center_err[Ysite]);
+      UnitAll = UnitAll + Weighting[TowPoint - Ysite - 1];
+            // printf("DetTemp1 = %f\n",DetTemp);
+            // printf("UnitAll1 = %f\n",UnitAll);
+
+    }
+    for (Ysite = (TowPoint + 5); Ysite > TowPoint; Ysite--) {
+      DetTemp += Weighting[-TowPoint + Ysite - 1] * (center_err[Ysite]);
+      UnitAll += Weighting[-TowPoint + Ysite - 1];
+        // printf("DetTemp2 = %f\n",DetTemp);
+        // printf("UnitAll2 = %f\n",UnitAll);
+    }
+    DetTemp = (center_err[TowPoint]) / (UnitAll + 1);
+        // printf("DetTemp = %f\n",DetTemp);
+    }
+    else if (TowPoint > line_detect_center) {
+    for (Ysite = line_detect_center; Ysite < TowPoint; Ysite++) {
+      DetTemp += Weighting[TowPoint - Ysite - 1] * (center_err[Ysite]);
+      UnitAll += Weighting[TowPoint - Ysite - 1];
+    }
+    for (Ysite = (TowPoint + TowPoint - line_detect_center); Ysite > TowPoint;
+         Ysite--) {
+      DetTemp += Weighting[-TowPoint + Ysite - 1] * (center_err[Ysite]);
+      UnitAll += Weighting[-TowPoint + Ysite - 1];
+    }
+    DetTemp = (center_err[Ysite] + DetTemp) / (UnitAll + 1);
+  } else if (line_detect_center < 49) {
+    for (Ysite = (line_detect_center + 3); Ysite > line_detect_center;
+         Ysite--) {
+      DetTemp += Weighting[-TowPoint + Ysite - 1] * (center_err[Ysite]);
+      UnitAll += Weighting[-TowPoint + Ysite - 1];
+    }
+    DetTemp = (center_err[line_detect_center] + DetTemp) / (UnitAll + 1);
+
+  } else
+    DetTemp =Det_True;                                                     //如果是出现line_detect_center>50情况，保持上一次的偏差值
+
+  Det_True = DetTemp;                                                      //此时的解算出来的平均图像偏差
+    // printf("DET = %d \n",Det_True);
+    TowPoint_True = TowPoint;                                                //此时的前瞻
+    points_test[0][1] =  40;
+    points_test[0][0] =  44+Det_True*10;
+    points_test[1][1] =  30;
+    points_test[1][0] =  44;
+    // printf("TowPoint_True = %d \n",TowPoint_True);
+    // printf("Det_True = %f \n",Det_True);
+
+
+
 }
 
 
