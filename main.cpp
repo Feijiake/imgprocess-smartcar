@@ -42,7 +42,8 @@ int main() {
         processor.draw_line_1(processor.disp_color_image,processor.r_border,cv::Scalar(255, 0, 0), use_h - 1);
         processor.draw_line_1(processor.disp_color_image,processor.center_line,cv::Scalar(0, 255, 0), use_h - 1);
         circle(processor.disp_color_image,Point(processor.points_test[0][0],processor.points_test[0][1]),2,cv::Scalar(0, 0, 255), FILLED);
-        circle(processor.disp_color_image,Point(processor.points_test[1][0],processor.points_test[1][1]),2,cv::Scalar(255, 0, 0), FILLED);
+        // circle(processor.disp_color_image,Point(processor.points_test[1][0],processor.points_test[1][1]),2,cv::Scalar(0, 0, 255), FILLED);
+        // circle(processor.disp_color_image,Point(processor.center_line[use_h-1],use_h-1),2,cv::Scalar(0, 0, 255), FILLED);
         // cv::circle(processor.disp_color_image,cv::Point(processor.center_line[use_h-20], use_h-20),1,cv::Scalar(0, 255, 255), 5);
         // for (int i = 0; i < processor.data_stastics_l; i++) {
         //     circle(processor.disp_color_image, Point(processor.points_l[i][0] + 2, processor.points_l[i][1]), 2, Scalar(0, 0, 255), FILLED); // Display starting point in blue

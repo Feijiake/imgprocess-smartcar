@@ -15,6 +15,7 @@
 
 typedef unsigned char       uint8;
 typedef unsigned short       uint16;
+typedef  short         int16;
 typedef char         int8;
 #define ImageUsed   *PerImg_ip
 #define RESULT_ROW 120 //逆透视结果图像的高度
@@ -61,17 +62,31 @@ public:
 
     /*逆透视*/
 
+    /*元素*/
+    #define  RightCirque_TowPoint_Flag 1
+    #define  LeftCirque_TowPoint_Flag 1
+    bool CirqueOff = false;
+    uint8 RightCirque_Flag = 0;
+    uint8 LeftCirque_Flag = 0;
+    uint8 Straight_Flag = 0;
+    uint8 Cross_Flag = 0;
+    uint8 Stop_Flag = 0;
+
+    /*元素*/
+
     /*寻线*/
     #define USE_num use_h*3
+    uint8 offline = 20;//截至行,截至行后的数据为无效数据
     uint16 data_stastics_l = 0;
     uint16 data_stastics_r = 0;
-    uint8 center_line[use_h];//中线数组
+
+    uint8 center_line[use_h] ={};//中线数组
     float center_err[use_h];//中线误差数组
     uint8 l_border[use_h];//左边线
     uint8 r_border[use_h];//右边线
     uint16 points_l[(uint16)USE_num][2] = { {  0 } };
     uint16 points_r[(uint16)USE_num][2] = { {  0 } };
-    uint16 dir_r[(uint16)USE_num] = { 0 };//?????????????????
+    uint16 dir_r[(uint16)USE_num] = { 0 };
     uint16 dir_l[(uint16)USE_num] = { 0 };
 
 
@@ -170,17 +185,15 @@ private:
     double change_un_Mat[3][3] ={{-0.371672,0.191928,1.624000},{-0.004298,0.013590,-7.454951},{-0.000330,0.002199,-0.331952}};//逆透视矩阵
     /*逆透视*/
 
-
     /*元素*/
-    #define  RightCirque_TowPoint_Flag 1
-    #define  LeftCirque_TowPoint_Flag 1
-    bool CirqueOff = false;
-    uint8 RightCirque_Flag = 0;
-    uint8 LeftCirque_Flag = 0;
-    uint8 Straight_Flag = 0;
-    uint8 Cross_Flag = 0;
-
+    uint8 straight_variance_acc_th = 10;
+    void Element_Detection(const cv::Mat& inputImage);//元素检测
+    void Staight_Detection(const cv::Mat& inputImage);
+    void cross_fill(const cv::Mat &inputImage, uint8 *l_border, uint8 *r_border, uint16 total_num_l,
+    uint16 total_num_r, uint16 *dir_l, uint16 *dir_r, uint16(*points_l)[2], uint16(*points_r)[2]);
     /*元素*/
+
+
 
     /*前瞻*/
     uint8 set_towpoint = 45;
@@ -189,7 +202,7 @@ private:
         /*前瞻*/
 
     /*寻线*/
-    uint8 offline = 30;//截至行,截至行后的数据为无效数据
+
     uint8 target_center[60] = {
         96, 127, 0, 0, 72, 16, 23, 70, 42, 39,
         39, 40, 40, 39, 40, 40, 40, 39, 40, 40,
@@ -308,6 +321,13 @@ private:
     /*调试信息*/
     void print_average_huidu(const cv::Mat& img, make_sizetype make_size, Threshold_min_type Threshold_min);
     /*调试信息*/
+
+    /*数学工具*/
+    float Slope_Calculate(uint8 begin, uint8 end, uint8 *border);
+    void calculate_s_i(uint8 start, uint8 end, uint8 *border, float *slope_rate, float *intercept);
+    #define limit_a_b(value, min, max) ((value) < (min) ? (min) : ((value) > (max) ? (max) : (value)))
+
+     /*数学工具*/
 
     /*接口类*/
     float Weighting[10] = {0.96, 0.92, 0.88, 0.83, 0.77,0.71, 0.65, 0.59, 0.53, 0.47};//10行权重参数，随意更改，基本不影响，大致按照正态分布即可
@@ -657,6 +677,59 @@ inline void img_process_object::print_average_huidu(const cv::Mat& img, make_siz
             printf("Pixel (%d, %d): Average Gray Value = %d\n", x, y, average_huidu);
         }
     }
+}
+
+inline float img_process_object::Slope_Calculate(uint8 begin, uint8 end, uint8 *border) {
+    float xsum = 0, ysum = 0, xysum = 0, x2sum = 0;
+	int16 i = 0;
+	float result = 0;
+	static float resultlast;
+
+	for (i = begin; i < end; i++)
+	{
+		xsum += i;
+		ysum += border[i];
+		xysum += i * (border[i]);
+		x2sum += i * i;
+
+	}
+	if ((end - begin)*x2sum - xsum * xsum) //判断除数是否为零
+	{
+		result = ((end - begin)*xysum - xsum * ysum) / ((end - begin)*x2sum - xsum * xsum);
+		resultlast = result;
+	}
+	else
+	{
+		result = resultlast;
+	}
+	return result;
+}
+
+inline void img_process_object::calculate_s_i(uint8 start, uint8 end, uint8 *border, float *slope_rate,
+    float *intercept) {
+    if (start >= end) { // 检查范围有效性
+        *slope_rate = 0;
+        *intercept = 0;
+        return;
+    }
+
+    uint16 xsum = 0, ysum = 0;
+    uint16 num = end - start;
+
+    // 计算 xsum 和 ysum
+    for (uint16 i = start; i < end; i++) {
+        xsum += i;
+        ysum += border[i];
+    }
+
+    // 计算平均值
+    float x_average = (float)xsum / num;
+    float y_average = (float)ysum / num;
+
+    // 计算斜率和截距
+    *slope_rate = Slope_Calculate(start, end, border); // 确保 Slope_Calculate 的实现有效
+    *intercept = y_average - (*slope_rate) * x_average;
+
 }
 
 inline int img_process_object::otsuThreshold_average(make_sizetype make_size, const cv::Mat& img, uint16_t x, uint16_t y, Threshold_min_type Threshold_min) {
@@ -1113,62 +1186,21 @@ inline void img_process_object::find_line()
     // 测量 image_draw_rectan
     // auto t1 = high_resolution_clock::now();
     image_draw_rectan(mt9v03x_image);
-    // auto t2 = high_resolution_clock::now();
-    // std::cout << "image_draw_rectan 运行时间: "
-    //           << duration_cast<milliseconds>(t2 - t1).count() << " ms" << std::endl;
-
-    // 测量 Get01change_dajin
-    // t1 = high_resolution_clock::now();
     cv::Mat tempImage = mt9v03x_image.clone();
     Get01change_dajin(tempImage, mt9v03x_image, 135, 220);
-    // t2 = high_resolution_clock::now();
-    // std::cout << "Get01change_dajin 运行时间: "
-    //           << duration_cast<milliseconds>(t2 - t1).count() << " ms" << std::endl;
-
-    // 测量 get_start_point
-    // t1 = high_resolution_clock::now();
     cv::Mat temp = mt9v03x_image.clone();
     if (get_start_point(temp, (start_h))) {
-        // t2 = high_resolution_clock::now();
-        // std::cout << "get_start_point 运行时间: "
-        //           << duration_cast<milliseconds>(t2 - t1).count() << " ms" << std::endl;
-
-        // 测量 search_l_r
-        // t1 = high_resolution_clock::now();
         search_l_r((uint16)USE_num, temp, start_point_l[0], start_point_l[1],
                    start_point_r[0], start_point_r[1], &hightest);
-        // t2 = high_resolution_clock::now();
-        // std::cout << "search_l_r 运行时间: "
-        //           << duration_cast<milliseconds>(t2 - t1).count() << " ms" << std::endl;
-
-        // 测量 get_right
-        // t1 = high_resolution_clock::now();
         get_right(data_stastics_r);
-        // t2 = high_resolution_clock::now();
-        // std::cout << "get_right 运行时间: "
-        //           << duration_cast<milliseconds>(t2 - t1).count() << " ms" << std::endl;
-
-        // 测量 get_left
-        // t1 = high_resolution_clock::now();
         get_left(data_stastics_l);
-        // t2 = high_resolution_clock::now();
-        // std::cout << "get_left 运行时间: "
-        //           << duration_cast<milliseconds>(t2 - t1).count() << " ms" << std::endl;
-
-        // 测量 get_center
-        // t1 = high_resolution_clock::now();
+        line_detect_center = max(line_detect_l, line_detect_r); // 获取中心行
+        // line_detect_center = max(line_detect_center, offline);
+        // printf("line_detect_center = %d\n",line_detect_center);
+        Element_Detection(temp);
         get_center();
-        // t2 = high_resolution_clock::now();
-        // std::cout << "get_center 运行时间: "
-        //           << duration_cast<milliseconds>(t2 - t1).count() << " ms" << std::endl;
-
-        // 测量 RouteFilter
-        // t1 = high_resolution_clock::now();
         RouteFilter();
         GetDet(40,40);
-        // t2 = high_resolution_clock::now();
-        // std::cout << "RouteFilter 运行时间: "
-        //           << duration_cast<milliseconds>(t2 - t1).count() << " ms" << std::endl;
     }
 
     // 总运行时间
@@ -1179,12 +1211,13 @@ inline void img_process_object::find_line()
 
 inline void img_process_object::get_center()
 {
-    for (int i = hightest; i < use_h - 1; i++) {
+    for (int i = use_h - 1; i > offline; i--) {
         center_line[i] = (l_border[i] + r_border[i]) >> 1; // Calculate center line
         center_err[i] = center_line[i] -target_center[i];
         // printf("center_line[%d] = %d\n",i,center_err[i]);
 
     }
+    // printf("center_line=%d\n",center_line[use_h-2]);
     // for (int i =0; i < use_h ; i++) {
     //     printf("center_line[%d] = %d\n",i,center_line[i]);
     // }
@@ -1194,7 +1227,7 @@ inline void img_process_object::RouteFilter()
 {
     float DetR; // 斜率
     // static bool test = false;
-    line_detect_center = max(line_detect_l, line_detect_r); // 获取中心行
+
     // printf("line_detect_center = %d,%d\n",line_detect_center,offline);
     // 检查中心行是否有效
     // if (test) {printf("按任意键继续...\n");
@@ -1205,7 +1238,7 @@ inline void img_process_object::RouteFilter()
         // printf("无效的 line_detect_center: %d <= offline: %d\n", line_detect_center, offline);
         return; // 如果中心行无效，直接返回
     }
-    for (int i = line_detect_center; i > offline-10; i--) // 从中心行向上遍历
+    for (int i = line_detect_center; i > offline; i--) // 从中心行向上遍历
     {
 
         // 计算斜率
@@ -1225,8 +1258,252 @@ inline void img_process_object::draw_line_1(cv::Mat& image, const uint8_t border
     for(int i=0;i<num;i++){
 
         cv::circle(image,cv::Point(border[i], i),1,color,-1);
+        // printf("center_line[%d] = %d\n",i,border[i]);
     }
 }
+
+inline void img_process_object::Element_Detection(const cv::Mat &inputImage) {
+    Staight_Detection(inputImage);
+    cross_fill(inputImage,l_border, r_border, data_stastics_l, data_stastics_r, dir_l, dir_r, points_l, points_r);
+}
+
+inline void img_process_object::Staight_Detection(const cv::Mat &inputImage) {
+    float variance, variance_acc;  // 方差
+    float sum = 0;
+    for (int Ysite = 50;Ysite > offline; Ysite--) {
+
+    sum += (center_line[Ysite]-target_center[Ysite]) *(center_line[Ysite]-target_center[Ysite]);
+  }
+    // printf("sum = %f\n",sum);
+    variance_acc = (float)sum / (49 - line_detect_center);
+    // printf("variance_acc = %f\n", variance_acc);
+    if (variance_acc < straight_variance_acc_th&&line_detect_r < 10 && line_detect_l < 10) {
+        Straight_Flag = 1;
+        printf("Straight_Flag = 1\n");
+    }else
+        Straight_Flag = 0;
+}
+
+inline void img_process_object::cross_fill(const cv::Mat &inputImage, uint8 *l_border, uint8 *r_border, uint16 total_num_l,
+    uint16 total_num_r, uint16 *dir_l, uint16 *dir_r, uint16(*points_l)[2], uint16(*points_r)[2]) {
+    uint8 total_lr = 0;
+    uint8 i;
+	uint8 break_num_l_up[2] = {0,0};
+    uint8 break_num_l_down[2] = {0,0};
+	uint8 break_num_r_up[2]= {0,0};
+    uint8 break_num_r_down[2]= {0,0};
+    static uint8 last_break_num_l_up[2]= {0,0};
+    static uint8 last_break_num_l_down[2]= {0,0};
+    static uint8 last_break_num_r_up[2]= {0,0};
+    static uint8 last_break_num_r_down[2]= {0,0};
+    bool off_left=false;
+    bool off_right=false;
+	uint8 start_l, end_l;
+    uint8 start_r, end_r;
+	float slope_l_rate = 0, intercept_l = 0;
+    float slope_r_rate = 0, intercept_r = 0;
+    bool l_complete = false;
+    bool r_complete = false;
+	//出十字
+
+    // printf("l_border:%d,r_border:%d\n",l_border[use_h-5],r_border[use_h-5]);
+    if (l_border[use_h-5] !=border_min+1 && r_border[use_h-5] !=border_max-2) {return;}
+
+    // printf("l_border[use_h-1]=%d r_border[use_h-1]=%d\n",l_border[use_h-2],r_border[use_h-2]);
+    for (i = use_h-2; i >= use_h/2;i--) {
+        // printf("l_border[use_h-1]=%d r_border[use_h-1]=%d\n",l_border[i],r_border[i]);
+        if (l_border[i]==border_min+1 && r_border[i]==border_max-2) {
+            total_lr++;
+        }
+
+    }
+    printf("total_lr = %d,use_h/3=%d\n", total_lr,use_h/3);
+    if (total_lr >=use_h/3) {
+        Cross_Flag =1;
+    }
+    else Cross_Flag =0;
+
+
+    if (Cross_Flag == 1) {
+        //找上拐点
+        for (i = (use_h-1)/2; i > 10;i--) {
+            // printf("l_border[use_h-1]=%d \n",l_border[i]);
+            if (l_border[i]>=border_min+7 && break_num_l_up[0]==0&&off_left==false) {
+                if (l_border[i]<last_break_num_l_up[0]) {
+                    off_left=true;
+                }
+                else {
+                    break_num_l_up[1] =i;
+                    break_num_l_up[0] =l_border[i];
+                    printf("找到左上拐点");
+                }
+            }
+            else if (off_left==false) {
+                last_break_num_l_up[1] =i;
+                last_break_num_l_up[0] =l_border[i];
+            }
+
+            printf("r_border[%d]=%d\n",i,r_border[i]);
+            printf("last_break_num_r_up[0]=%d\n",last_break_num_r_up[0]);
+            if (r_border[i]>=use_w/2&&r_border[i]<=border_max-7 && break_num_r_up[0]==0&&off_right==false) {
+                printf("ok\n");
+                if (r_border[i]>last_break_num_r_up[0]) {
+                    off_right=true;
+                    printf("找到右上拐点%d\n",break_num_r_up[1]);
+                }
+                else {
+                    break_num_r_up[1] =i;
+                    break_num_r_up[0] =r_border[i];
+
+
+                }
+            }
+            else if (off_right==false) {
+                last_break_num_r_up[1] =i;
+                last_break_num_r_up[0] =r_border[i];
+            }
+
+            if (break_num_r_up[0]!=0&&break_num_l_up[0]!=0) {
+                break;
+            }
+            if (off_left==true && off_right==true) {
+
+                return;//没找到上拐点return
+            }
+        }
+
+        for (i = (use_h-1)/2; i <use_h-1;i++) {
+            // printf("l_border[use_h-1]=%d \n",l_border[i]);
+            if (l_border[i]>=border_min+7 && break_num_l_down[0]==0&&off_left==false) {
+                if (l_border[i]<last_break_num_l_down[0]) {
+                    off_left=true;
+                }else {
+                    break_num_l_down[1] =i;
+                    break_num_l_down[0] =l_border[i];
+                    printf("找到左下拐点");
+                }
+
+            }
+            else if (off_left==false) {
+                last_break_num_l_down[1] =i;
+                last_break_num_l_down[0] =l_border[i];
+            }
+
+            if (r_border[i]<=border_max-7 && break_num_r_down[0]==0&&off_right==false) {
+                if (r_border[i]>last_break_num_r_down[0]) {
+                    off_right=true;
+                }else {
+                    break_num_r_down[1] =i;
+                    break_num_r_down[0] =r_border[i];
+                    printf("找到右下拐点");
+                }
+
+
+            }
+            else if (off_right==false) {
+                last_break_num_r_down[1] =i;
+                last_break_num_r_down[0] =r_border[i];
+            }
+
+            if (break_num_r_down[0]!=0&&break_num_l_down[0]!=0) {
+                break;
+            }
+            if (off_left==true && off_right==true) {
+                break;
+            }
+        }
+    }
+
+    printf("break_num_l_up[1]:%d,break_num_r_up[1]=%d\n",break_num_l_up[0],break_num_r_up[0]);
+
+    if (break_num_l_up[0])
+    {
+        start_l = break_num_l_up[1]-3;
+        start_l = limit_a_b(start_l, 0, use_h);
+        end_l = break_num_l_up[1];
+
+        calculate_s_i(start_l, end_l, l_border, &slope_l_rate, &intercept_l);
+        printf("slope_l_rate:%f\nintercept_l:%f\n", slope_l_rate, intercept_l);
+        for (i = start_l; i < use_h - 1; i++)
+        {
+            if (slope_l_rate * (i)+intercept_l <0) {
+                l_border[i] = border_min;
+            }else if (slope_l_rate * (i)+intercept_l >border_max) {
+                l_border[i] = border_max;
+            }else l_border[i] = slope_l_rate * (i)+intercept_l;//y = kx+b
+            l_border[i] = limit_a_b(l_border[i], border_min, border_max);//限幅
+            l_complete =true;
+        }
+
+    }
+    if (break_num_l_down[0] &&l_complete == false) {
+        //计算斜率
+        start_l = break_num_l_down[1]+1;
+        start_l = limit_a_b(start_l, 0, use_h);
+        end_l = break_num_l_down[1]+5;
+
+
+        calculate_s_i(start_l, end_l, l_border, &slope_l_rate, &intercept_l);
+        printf("slope_l_rate:%f\nintercept_l:%f\n", slope_l_rate, intercept_l);
+        for (i = start_l; i < use_h - 1; i++)
+        {
+            if (slope_l_rate * (i)+intercept_l <0) {
+                l_border[i] = border_min;
+            }
+            else if (slope_l_rate * (i)+intercept_l >border_max) {
+                l_border[i] = border_max;
+            }
+            else l_border[i] = slope_l_rate * (i)+intercept_l;//y = kx+b
+            l_border[i] = limit_a_b(l_border[i], border_min, border_max);//限幅
+            // printf("l_border[use_h-2]=%d \n",l_border[use_h-2]);
+        }
+    }
+    if (break_num_r_up[0]) {
+        start_r = break_num_r_up[1]-3;
+        start_r = limit_a_b(start_r, 0, use_h);
+        end_r = break_num_r_up[1];
+        printf("start_r:%d,end_r:%d\n", start_r, end_r);
+        calculate_s_i(start_r, end_r, r_border, &slope_r_rate, &intercept_r);
+        printf("slope_r_rate:%f\nintercept_r:%f\n", slope_r_rate, intercept_r);
+        for (i = start_r; i < use_h - 1; i++)
+        {
+            if (slope_r_rate * (i)+intercept_r <0) {
+                r_border[i] = border_min;
+            }
+            else if (slope_r_rate * (i)+intercept_r >border_max) {
+                r_border[i] = border_max;
+            }
+            else r_border[i] = slope_r_rate * (i)+intercept_r;
+            r_border[i] = limit_a_b(r_border[i], border_min, border_max);
+        }
+        r_complete = true;
+        // printf("r_border[use_h-2]=%d \n",r_border[use_h-2]);
+
+    }
+    if (break_num_r_down[0] &&r_complete == false) {
+        start_r = break_num_r_down[1]+1;
+        start_r = limit_a_b(start_r, 0, use_h);
+
+        end_r = break_num_r_down[1]+5;
+        printf("start_r:%d,end_r:%d\n", start_r, end_r);
+        calculate_s_i(start_r, end_r, r_border, &slope_r_rate, &intercept_r);
+        printf("slope_r_rate:%f\nintercept_r:%f\n", slope_r_rate, intercept_r);
+        for (i = start_r; i < use_h - 1; i++)
+        {
+            if (slope_r_rate * (i)+intercept_r <0) {
+                r_border[i] = border_min;
+            }
+            else if (slope_r_rate * (i)+intercept_r >border_max) {
+                r_border[i] = border_max;
+            }
+            else r_border[i] = slope_r_rate * (i)+intercept_r;
+            r_border[i] = limit_a_b(r_border[i], border_min, border_max);
+        }
+        // printf("r_border[use_h-2]=%d \n",r_border[use_h-2]);
+    }
+
+}
+
 inline void img_process_object::GetDet(const uint8 speed_now,const uint8 speed_min)
 {
     float DetTemp = 0;//计算平均误差
@@ -1298,10 +1575,10 @@ inline void img_process_object::GetDet(const uint8 speed_now,const uint8 speed_m
   Det_True = DetTemp;                                                      //此时的解算出来的平均图像偏差
     // printf("DET = %d \n",Det_True);
     TowPoint_True = TowPoint;                                                //此时的前瞻
-    points_test[0][1] =  40;
-    points_test[0][0] =  44+Det_True*10;
-    points_test[1][1] =  30;
-    points_test[1][0] =  44;
+    // points_test[0][1] =  40;
+    // points_test[0][0] =  44+Det_True*10;
+    // points_test[1][1] =  30;
+    // points_test[1][0] =  44;
     // printf("TowPoint_True = %d \n",TowPoint_True);
     // printf("Det_True = %f \n",Det_True);
 
